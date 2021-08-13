@@ -1,0 +1,47 @@
+准备工作
+1：完成第一篇教程，确保Hadoop正常运行。
+2：下载Hive，我安装的版本是apache-hive-2.1.1-bin。安装路径是D:\apache-hive-2.1.1-bin。
+3：设置环境变量 HIVE_HOME=D:\apache-hive-2.1.1-bin
+
+元数据（metastore）
+    这个是Hive独有的概念。
+    怎么理解呢？
+    HIVE的功能是将HQL翻译成MapReduce在Hadoop上执行。
+    元数据的功能就是将HQL翻译成MapReduce所需要的数据。
+    元数据默认存储在Derby中，建议都用关系型数据库。我的例子是使用了MySql。
+
+部署过程
+几个关键位置
+D:\apache-hive-2.1.1-bin\conf
+D:\apache-hive-2.1.1-bin\bin
+D:\apache-hive-2.1.1-bin\scripts\metastore\upgrade
+
+hive-site.xml 项目已经有了配置文件
+hive-log4j2.properties   项目已经有了配置文件
+
+4：hadoop创建文件夹(hdfs)
+    hadoop上需要创建目录/user/hive/warehouse/的文件夹
+5：启动Hadoop
+6：启动hive
+    启动metastore
+
+    >hive --service metastore -hiveconf hive.root.logger=DEBUG
+    1
+    启动hiveserver
+
+    >hive --service hiveserver2
+    1
+    启动客户端
+
+    >hive --service cli
+    如果没有报错，表示win10安装hive成功。
+7：执行测试语句
+        hive> create table test_table(id INT, name string);
+        hive> show tables;
+        这个test_table应该可以在Hadoop的路径下看到。
+
+        猜测
+        Hive和Hadoop的master是部署在一起的，那是否可以理解为Hive实际上是通过环境变量HADOOP_HOME来读取hadoop的配置，同Hadoop进行交互的。
+        因为Hive中并没有任何Hadoop的配置信息
+
+
