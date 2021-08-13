@@ -1,0 +1,13 @@
+<configuration>
+	<!-- 配置yarn主节点的位置 -->
+	<property>
+		<name>yarn.resourcemanager.hostname</name>
+		<value>node1</value>
+	</property>
+
+	<property>
+		<name>yarn.nodemanager.aux-services</name>
+		<value>mapreduce_shuffle</value>
+	</property>
+
+</configuration>

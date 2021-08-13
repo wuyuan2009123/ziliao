@@ -1,0 +1,14 @@
+sudo yum install libXt.i686 libXtst.i686 libXp.i686
+
+sudo tar -zxvf hadoop-2.7.5.tar.gz -C /opt/
+sudo systemctl stop firewalld.service
+sudo systemctl disable firewalld.service
+sudo vim /etc/selinux/config  
+	SELINUX=disabled
+
+/opt/hadoop-2.7.5/etc/hadoop
+
+启动方式1：start-all.sh
+启动方式2：先start-dfs.sh,再start-yarn.sh
+
+

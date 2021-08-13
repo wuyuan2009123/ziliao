@@ -1,0 +1,21 @@
+1:安装expect
+  yum install expect
+2:创建脚本
+  cd /export/servers
+  vim  beenline.exp
+  添加以下内容:
+	#!/bin/expect
+	spawn beeline
+	set timeout 5
+	expect "beeline>"
+	send "!connect jdbc:hive2://node03:10000\r"
+	expect "Enter username for jdbc:hive2://node03:10000:"
+	send "root\r"
+	expect "Enter password for jdbc:hive2://node03:10000:"
+	send "123456\r"
+	interact
+3:修改脚本权限
+   chmod 777 beenline.exp
+4:启动beeline
+  expect beenline.exp
+

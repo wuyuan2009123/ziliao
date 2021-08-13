@@ -1,0 +1,5 @@
+测试1,分布式存储的测试
+ hdfs dfs -put baoqiang.txt /
+测试2,分布式计算的测试
+ cd /export/servers/hadoop-2.7.5/share/hadoop/mapreduce/
+ hadoop jar hadoop-mapreduce-examples-2.7.5.jar pi 2 10
