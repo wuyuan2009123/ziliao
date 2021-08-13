@@ -1,0 +1,90 @@
+1：安装JDK1.8。
+2：环境变量中添加JAVA_HOME。
+3：下载hadoop2.7.5。
+4：解压到D盘，路径为D:\hadoop2.7.5。
+5：环境变量中添加HADOOP_HOME=D:\hadoop2.7.5\
+6：将D:\hadoop2.7.3\bin和D:\hadoop2.7.5\sbin添加到path中。
+7：下载一个重要的东西。
+     https://github.com/wuyuan2009123/hadooponwindows
+8：删除hadoop下的etc和bin。
+9：将hadooponwindows里的etc和bin拷贝到D:\hadoop2.7.1\下。
+修改配置文件
+    1：etc/hadoop/core-site.xml
+        <configuration>
+           <property>
+               <name>fs.defaultFS</name>
+               <value>hdfs://localhost:9000</value>
+           </property>
+        </configuration>
+    2：etc/hadoop/mapred-site.xml
+        <configuration>
+           <property>
+               <name>mapreduce.framework.name</name>
+               <value>yarn</value>
+           </property>
+        </configuration>
+     3：etc/hadoop/hdfs-site.xml
+            需要参一下这个连接，解释地址参数如何写。
+
+            http://stackoverflow.com/questions/34871814/failed-to-start-namenode-in-hadoop
+
+            <configuration>
+               <property>
+                   <name>dfs.replication</name>
+                   <value>1</value>
+               </property>
+               <property>
+                   <name>dfs.namenode.name.dir</name>
+                   <value>file:/hadoop-2.7.5/data/namenode</value>
+               </property>
+               <property>
+                   <name>dfs.datanode.data.dir</name>
+                 <value>file:/hadoop-2.7.5/data/datanode</value>
+               </property>
+            </configuration>
+        4：etc\hadoop\yarn-site.xml
+            <configuration>
+                <property>
+                   <name>yarn.nodemanager.aux-services</name>
+                   <value>mapreduce_shuffle</value>
+                </property>
+                <property>
+                   <name>yarn.nodemanager.aux-services.mapreduce.shuffle.class</name>
+                   <value>org.apache.hadoop.mapred.ShuffleHandler</value>
+                </property>
+            </configuration>
+         5：etc/hadoop/hadoop-env.cmd
+            set JAVA_HOME=C:\PROGRA~1\Java\jdk1.8.0_111
+            “program files”由于有空格所以会出错，采用上面的形式就OK了。
+
+
+        执行操作
+            1：格式化namenode
+            hdfs namenode -format
+
+
+        sbin目录下执行
+        start-all
+        启动了4个窗口，namenode,datanode,yarn resourcemanager,yarn nodemanager.
+
+        小插曲：其中yarn resourcemanager这个报错，提示8088端口被占用。结果是我本地的一个软件把这个端口给用了，停掉软件，重新启动正常。
+
+        3：停止Hadoop
+        sbin下执行
+
+        stop-all
+        Hadoop都停止了。
+
+        结束语
+        这样hadoop就在windows上正常运行了。
+
+        Resourcemanager GUI address - http://localhost:8088
+
+        Namenode GUI address – http://localhost:50070
+
+        至此windows下Hadoop安装成功！
+
+
+参考地址：
+https://blog.csdn.net/tornadojava/article/details/56013420
+
