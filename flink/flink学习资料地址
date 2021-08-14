@@ -5,6 +5,8 @@ https://archive.apache.org/dist/flink/
 
 flink-1.10.0  还支持win环境
 
+启动: start-cluster.bat
+
 flink 本地集群搭建
 参考图片
 
