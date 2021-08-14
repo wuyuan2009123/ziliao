@@ -5,6 +5,12 @@ https://archive.apache.org/dist/flink/
 
 flink-1.10.0  还支持win环境
 
+    taskmanager.cpu.cores: 2
+    taskmanager.memory.task.heap.size: 512m
+    taskmanager.memory.managed.size: 512m
+    taskmanager.memory.network.min: 64m
+    taskmanager.memory.network.max: 64m
+
 启动: start-cluster.bat
 
 flink 本地集群搭建
