@@ -1,0 +1,190 @@
+服务器准备 3 台 2C 2G
+
+一、环境配置
+
+安装必要的软件
+
+yum install -y net-tools.x86_64 vim wget
+
+配置hosts
+
+cat >> /etc/hosts << EOF
+192.168.200.30 master
+192.168.200.31 node1
+192.168.200.32 node2
+EOF
+
+设置主机名，三台分别执行
+
+
+
+hostnamectl set-hostname master
+hostnamectl set-hostname node1
+hostnamectl set-hostname node2
+
+ 关闭防火墙
+
+systemctl disable firewalld
+systemctl stop firewalld
+
+禁用SELinux，让容器可以顺利地读取主机文件系统
+
+
+setenforce 0
+sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
+为了切换系统方便，这里做一个免密操作
+
+在本机（此主机名记为 nodeA）自动以rsa算法生成公私钥对
+
+ssh-keygen -t rsa -f /root/.ssh/id_rsa -P ""
+配置公钥到其他节点（此主机名记为 node1），输入对方密码即可完成从nodeA到node1的免密访问
+
+
+
+ssh-copy-id node1  【可以考虑用 MobaXterm工具多窗口执行】
+
+下载docker.repo包至 /etc/yum.repos.d/目录
+
+wget https://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+
+在该目录中新建kubernetes仓库文件
+
+
+
+cat <<EOF > /etc/yum.repos.d/kubernetes.repo
+[kubernetes]
+name=Kubernetes
+baseurl=https://mirrors.aliyun.com/kubernetes/yum/repos/kubernetes-el7-x86_64/
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://mirrors.aliyun.com/kubernetes/yum/doc/rpm-package-key.gpg
+        https://mirrors.aliyun.com/kubernetes/yum/doc/yum-key.gpg
+EOF
+
+查看当前系统有效的repolist
+
+
+
+yum repolist
+
+
+重启同步系统时间（保证多台服务的时间一致）
+
+systemctl restart chronyd
+
+ 二、开始安装
+
+安装docker
+
+yum install docker-ce
+
+设置开机启动
+systemctl enable docker && systemctl start docker
+
+配置镜像加速
+
+cat >> /etc/docker/daemon.json <<-'EOF'
+{
+  "registry-mirrors": ["https://5z6d320l.mirror.aliyuncs.com"],
+"exec-opts": ["native.cgroupdriver=systemd"]
+}
+EOF
+
+加载并重启
+
+sudo systemctl daemon-reload && sudo systemctl restart docker
+
+将桥接的IPv4流量传递到iptables的链
+
+cat > /etc/sysctl.d/k8s.conf << EOF
+   net.bridge.bridge-nf-call-ip6tables = 1
+   net.bridge.bridge-nf-call-iptables = 1
+EOF
+
+查看信息
+
+sysctl --system
+ 如果后面初始化报错，则将显示 。。ip6tables = 0 的记录改为1
+
+ 开始安装kubelet kubeadm kubectl
+
+ yum install -y kubelet kubeadm kubectl
+ 启动kubelet并设置开机自启
+
+ systemctl enable kubelet && systemctl start kubelet
+  关闭swap
+
+
+
+ Swap是操作系统在内存吃紧的情况申请的虚拟内存，按照Kubernetes官网的说法，Swap会对Kubernetes的性能造成影响，不推荐使用Swap
+
+ swapoff -a
+ 如果不禁用，则需要如下配置
+
+ vim /etc/sysconfig/kubelet 修改内容：
+
+  KUBELET_EXTRA_ARGS="--fail-swap-on=false"
+ 初始化（版本一定要与安装的一样，可以）kubeadm version 来查看版本信息
+
+ （注意，这里只有主节点才执行，node节点不要做此操作）
+
+kubeadm init --kubernetes-version="v1.17.4" --pod-network-cidr="10.244.0.0/16" --ignore-preflight-errors=Swap
+由于初始化比较慢，需要中央仓库拉取镜像，且k8s服务正常无法访问，所以我们直接拉取国内别人已经打包好了的镜像
+
+解决无法从谷歌官网上下载k8s镜像的手段
+
+先从国内已经存在的仓库中下载，然后再tag成kubeadm中显示的镜像
+
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/kube-apiserver:v1.17.4
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/kube-controller-manager:v1.17.4
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/kube-scheduler:v1.17.4
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/kube-proxy:v1.17.4
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.1
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/etcd:3.4.3-0
+docker pull registry.cn-hangzhou.aliyuncs.com/google_containers/coredns:1.6.5
+
+下载完后进行tag镜像
+
+
+
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/kube-apiserver:v1.17.4 k8s.gcr.io/kube-apiserver:v1.17.4
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/kube-controller-manager:v1.17.4 k8s.gcr.io/kube-controller-manager:v1.17.4
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/kube-scheduler:v1.17.4 k8s.gcr.io/kube-scheduler:v1.17.4
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/kube-proxy:v1.17.4 k8s.gcr.io/kube-proxy:v1.17.4
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/pause:3.1 k8s.gcr.io/pause:3.1
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/etcd:3.4.3-0 k8s.gcr.io/etcd:3.4.3-0
+docker tag registry.cn-hangzhou.aliyuncs.com/google_containers/coredns:1.6.5 k8s.gcr.io/coredns:1.6.5
+
+主节点安装完成后，继续安装网络插件，只需要在主节点上安装，以上操作，除了初始化主节点不需要在node节点操作外，其它操作都需要进行一遍
+
+
+
+
+
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+当节点状态变成ready,主节点安装成功
+
+配置kubenetes的flannel网络的时候，出现以下报错
+
+The connection to the server localhost:8080 was refused - did you specify the right host or port?
+
+
+
+
+
+export KUBECONFIG=/etc/kubernetes/admin.conf
+将admin.conf复制到各个节点后即可以在node节点上也能执行kubectl命令查看
+
+
+
+主节点安装完成后会生成一个token值，把这个token复制出来，暂存起来，以免弄丢，节点加入集群是需要这个token
+
+kubeadm join 192.168.200.30:6443 --token 8fjzge.xmszmqh2fq7d2epb \
+    --discovery-token-ca-cert-hash sha256:9b2a26221de7a713a35a777969d8089e850ad3dcef202417fd18c41968950d2a
+
+
+各位生成的token类似于这样一串
+
+
+
