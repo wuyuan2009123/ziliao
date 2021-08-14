@@ -1,0 +1,539 @@
+准备工作
+1：JDK 1.8
+2：Eclipse (Neon)
+3：Maven 3.3.9
+4：完成本系列的前两篇文章，并且没有错误。Hadoop和HBase正常运行。
+
+实现过程
+1：创建maven工程
+2：修改POM文件
+<properties>
+        <hbase-version>1.3.0</hbase-version>
+        <hadoop-version>2.7.3</hadoop-version>
+    </properties>
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.hbase</groupId>
+            <artifactId>hbase-client</artifactId>
+            <version>${hbase-version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.hadoop</groupId>
+            <artifactId>hadoop-hdfs</artifactId>
+            <version>${hadoop-version}</version>
+        </dependency>
+
+    </dependencies>
+
+3：拷贝Hadoop的配置文件
+hadoop-2.7.3/etc/hadoop下的三个文件，core-site.xml,hdfs-site.xml,mapred-site.xml拷贝到工程下的src/main/resources/hadoop下目录中
+4：拷贝HBase的配置文件
+Hbase-1.3.0/conf/目录下的hbase-site.xml拷贝到工程下的src/main/resources/hbase目录中
+5：编写HBaseHelper类
+这个类是操作HBase的基本类，目前为了测试仅仅实现了简单的功能，后期需要完善，同时为了操作方便构建一个对象ColumnFamilyValue,这个对象保存了一个列簇的数据（这个其实是一个最简单列簇的数据）。
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.util.Bytes;
+
+/**
+ * 一个ColumnFamily结构的对象 包括了family的名称 列数组 值数组
+ *
+ * @author Administrator
+ *
+ */
+public class ColumnFamilyValue
+{
+    public String familyName;
+
+    public String[] columnName;
+
+    public String[] values;
+
+    public void put(Put put) throws Exception
+    {
+        if (columnName.length != values.length)
+        {
+            throw new Exception("columnFamily is " + familyName + ",columns's length no equals datas's length!");
+        }
+        else
+        {
+            for (int i = 0; i < columnName.length; i++)
+            {
+                put.addColumn(Bytes.toBytes(familyName), Bytes.toBytes(columnName[i]), Bytes.toBytes(values[i]));
+                System.out.println("columnFamily put , familyName="+familyName+","+columnName[i]+","+values[i]);
+            }
+        }
+    }
+}
+
+HBaseHelper类：
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hbase.HBaseConfiguration;
+import org.apache.hadoop.hbase.HColumnDescriptor;
+import org.apache.hadoop.hbase.HTableDescriptor;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.HBaseAdmin;
+import org.apache.hadoop.hbase.client.HTable;
+import org.apache.hadoop.hbase.client.Put;
+import org.apache.hadoop.hbase.client.ResultScanner;
+import org.apache.hadoop.hbase.client.Scan;
+import org.apache.hadoop.hbase.util.Bytes;
+
+/**
+ * 操作HBase的工具类
+ * @author Administrator
+ *
+ */
+public class HBaseHelper
+{
+
+    /**
+     * HBase的配置对象，启动的时候会从classpath中加载对应的配置信息
+     */
+    public static Configuration CONF = HBaseConfiguration.create();
+
+    /**
+     * 创建表
+     * @param tablename   表名
+     * @param columnFamily 列簇(columnFamily)的信息
+     * @throws Exception
+     */
+    @SuppressWarnings("deprecation")
+    public static void createTable(String tablename, String[] columnFamily) throws Exception
+    {
+        HBaseAdmin admin = new HBaseAdmin(CONF);
+        if (admin.tableExists(tablename))
+        {
+            System.out.println("["+tablename+"]已经存在！");
+        }
+        else
+        {
+            HTableDescriptor tableDesc = new HTableDescriptor(TableName.valueOf(tablename));
+            for (String column : columnFamily)
+            {
+                tableDesc.addFamily(new HColumnDescriptor(column));
+            }
+            admin.createTable(tableDesc);
+            System.out.println("创建["+tablename+"]成功！");
+        }
+        admin.close();
+
+    }
+
+    /**
+     * 添加一条数据
+     * @param tableName 表名
+     * @param rowKey rowkey，唯一主键
+     * @param columnFamily 列簇值对象数组，一张表可能包含多个列簇
+     * @throws Exception
+     */
+    @SuppressWarnings({ "resource", "deprecation" })
+    public static void addRow(String tableName, String rowKey, ColumnFamilyValue[] columnFamily) throws Exception
+    {
+        HTable table = new HTable(CONF, tableName);
+        Put put = new Put(Bytes.toBytes(rowKey));
+        System.out.println("put rowKey===================>" + rowKey + "==================");
+        for (int i = 0; i < columnFamily.length; i++)
+        {
+            columnFamily[i].put(put);
+        }
+        table.put(put);
+        System.out.println("put rowKey===================>" + rowKey + "==================");
+    }
+
+    /**
+     * 返回一个表的全部数组，这个操作在生产上不会有，这里就是为了测试。
+     * @param table 表的名称
+     * @return
+     * @throws Exception
+     */
+    public static ResultScanner scanAll(HTable table) throws Exception
+    {
+        Scan s = new Scan();
+        ResultScanner rs = table.getScanner(s);
+        return rs;
+    }
+}
+
+6：RowData
+这个接口是需要具体的类进行实现了，提取了两个函数，一个是保存，一个是解析。是对一个表的操作抽取！
+import org.apache.hadoop.hbase.client.Result;
+
+public interface RowData
+{
+    /**
+     * 将对象保存到HBase中
+     * @param rowKey
+     * @throws Exception
+     */
+    public void save() throws Exception;
+
+    /**
+     * 解析从HBase读取的数据
+     * @param rs
+     */
+    public void parse(Result rs) throws Exception;
+
+}
+
+7：FamilyData
+这个抽象类是数据列簇的一个抽象，列簇对象需要继承这个抽象类。
+import java.util.NavigableMap;
+
+import org.lipengbin.hbase.ColumnFamilyValue;
+
+/**
+ * 将一个对象转换成ColumnFamily
+ *
+ * @author Administrator
+ *
+ */
+public abstract class FamilyData
+{
+    protected String familyName;
+
+
+    public ColumnFamilyValue toFamily()
+    {
+        ColumnFamilyValue family=new ColumnFamilyValue();
+        family.columnName=getColumnNames();
+        family.values=getValues();
+        family.familyName=familyName;
+        return family;
+    }
+
+    /**
+     * 获取列名称对象
+     * @return
+     */
+    protected abstract String[] getColumnNames();
+
+    /**
+     * 获取列的值对象
+     * @return
+     */
+    protected abstract String[] getValues();
+
+    /**
+     * 根据HBase返回的Key-Value值解析属性
+     * @param kv
+     */
+    protected abstract void parse(NavigableMap<byte[], byte[]> kv);
+
+}
+
+8：Student
+这个类是HBase最后存储的对象格式。可以认为是一个表结构对应的对象！
+有两个列簇：EssentialInfomation和ScoreInformation
+
+/**
+ * 学生信息
+ *
+ * @author Administrator
+ *
+ */
+public class Student implements RowData
+{
+
+    public static final String EI_FAMILY_NAME = "essentialInformation";
+
+    public static final String SI_FAMILY_NAME = "scoreInformation";
+
+    /**
+     * 学生基本信息
+     *
+     * @author Administrator
+     *
+     */
+    public static class EssentialInformation extends FamilyData
+    {
+        /**
+         * 姓名
+         */
+        public String name;
+
+        /**
+         * 年龄
+         */
+        public int age;
+
+        /**
+         * 性别
+         */
+        public String gender;
+        /**
+         * 班级名称
+         */
+        public String classesName;
+
+        /**
+         * 列的名称
+         */
+        private static final String[] columnsName = new String[] { "name", "age", "gender", "classesName" };
+
+        //解析的时候使用
+        public EssentialInformation()
+        {}
+
+        public EssentialInformation(String n, int a, String g, String c)
+        {
+            this.familyName = EI_FAMILY_NAME;
+            this.name = n;
+            this.age = a;
+            this.gender = g;
+            this.classesName = c;
+        }
+
+        @Override
+        protected String[] getColumnNames()
+        {
+            return columnsName;
+        }
+
+        @Override
+        protected String[] getValues()
+        {
+            return new String[] { name, String.valueOf(age), gender, classesName };
+        }
+
+        @Override
+        protected void parse(NavigableMap<byte[], byte[]> kv)
+        {
+            this.name=new String(kv.get(Bytes.toBytes("name")));
+            this.age=Integer.parseInt(new String(kv.get(Bytes.toBytes("age"))));
+            this.gender=new String(kv.get(Bytes.toBytes("gender")));
+            this.classesName=new String(kv.get(Bytes.toBytes("classesName")));
+        }
+
+        public String toString()
+        {
+            StringBuilder builder=new StringBuilder();
+            builder.append("{name="+name);
+            builder.append(",");
+            builder.append("age="+age);
+            builder.append(",");
+            builder.append("gender="+gender);
+            builder.append(",");
+            builder.append("classesName="+classesName);
+            builder.append("},");
+            return builder.toString();
+        }
+
+    }
+
+    public static class ScoreInformation extends FamilyData
+    {
+        /**
+         * 数学
+         */
+        public int math;
+
+        /**
+         * 英语
+         */
+        public int english;
+
+        /**
+         * 中文
+         */
+        public int chinese;
+
+        /**
+         * 体育
+         */
+        public int sports;
+
+        private static final String[] columnNames = new String[] { "math", "english", "chinese", "sports" };
+        //解析的时候使用
+        public ScoreInformation(){}
+        public ScoreInformation(int m, int e, int c, int s)
+        {
+            this.familyName = SI_FAMILY_NAME;
+            this.math = m;
+            this.english = e;
+            this.chinese = c;
+            this.sports = s;
+        }
+
+        @Override
+        protected String[] getColumnNames()
+        {
+            return columnNames;
+        }
+
+        @Override
+        protected String[] getValues()
+        {
+            return new String[] { String.valueOf(math), String.valueOf(english), String.valueOf(chinese),
+                    String.valueOf(sports) };
+        }
+
+        @Override
+        protected void parse(NavigableMap<byte[], byte[]> kv)
+        {
+            this.math=Integer.parseInt(new String(kv.get(Bytes.toBytes("math"))));
+            this.english=Integer.parseInt(new String(kv.get(Bytes.toBytes("english"))));
+            this.chinese=Integer.parseInt(new String(kv.get(Bytes.toBytes("chinese"))));
+            this.sports=Integer.parseInt(new String(kv.get(Bytes.toBytes("sports"))));
+
+        }
+
+        public String toString()
+        {
+            StringBuilder builder=new StringBuilder();
+            builder.append("{math="+math);
+            builder.append(",");
+            builder.append("english="+english);
+            builder.append(",");
+            builder.append("chinese="+chinese);
+            builder.append(",");
+            builder.append("sports="+sports);
+            builder.append("},");
+            return builder.toString();
+        }
+
+    }
+
+    /**
+     * 基本信息
+     */
+    public EssentialInformation essentialInformation;
+
+    /**
+     * 考试信息
+     */
+    public ScoreInformation scoreInformation;
+
+    /**
+     * 表名称
+     */
+    public static final String TABLE_NAME = "student";
+
+    public String rowKey="";
+
+    public Student()
+    {
+
+    }
+    /**
+     *
+     * @param e
+     * @param s
+     */
+    public Student(String rowKey,EssentialInformation e, ScoreInformation s)
+    {
+        this.rowKey=rowKey;
+        this.essentialInformation = e;
+        this.scoreInformation = s;
+    }
+
+    /**
+     * 将对象进行存储
+     *
+     * @param rowKey
+     * @throws Exception
+     */
+    public void save() throws Exception
+    {
+        ColumnFamilyValue[] columnFamily = new ColumnFamilyValue[] { essentialInformation.toFamily(),
+                scoreInformation.toFamily() };
+        HBaseHelper.addRow(TABLE_NAME, rowKey, columnFamily);
+    }
+
+    /**
+     * 解析从HBase读取的数据
+     *
+     * @param rs
+     */
+    public void parse(Result rs)
+    {
+        this.rowKey=new String(rs.getRow());
+        NavigableMap<byte[], byte[]> ei_map = rs.getFamilyMap(Bytes.toBytes(EI_FAMILY_NAME));
+        NavigableMap<byte[], byte[]> si_map = rs.getFamilyMap(Bytes.toBytes(SI_FAMILY_NAME));
+
+        this.essentialInformation=new EssentialInformation();
+        this.essentialInformation.parse(ei_map);
+
+        this.scoreInformation=new ScoreInformation();
+        this.scoreInformation.parse(si_map);
+
+    }
+
+    public String toString()
+    {
+        StringBuilder builder=new StringBuilder();
+        builder.append("rowkey="+this.rowKey);
+        builder.append(",");
+        builder.append(this.essentialInformation.toString());
+        builder.append(this.scoreInformation.toString());
+        builder.append("\n");
+
+        return builder.toString();
+    }
+}
+
+9：构建测试类TestMain
+public class TestMain
+{
+
+    @SuppressWarnings("deprecation")
+    public static void main(String[] args) throws Exception
+    {
+        //创建表
+        HBaseHelper.createTable(Student.TABLE_NAME, new String[] { Student.EI_FAMILY_NAME, Student.SI_FAMILY_NAME });
+        //定义数据
+        String[] names = new String[] { "Li", "Tom", "Jack", "Jackey", "Joy", "Joseph", "Lily", "Sophie", "Ken","Bob" };
+        int[] ages = new int[] { 9, 9, 9, 9, 9, 10, 10, 10, 10, 10 };
+        String[] genders = new String[] { "boy", "girl", "boy", "girl", "boy", "girl", "boy", "girl", "boy", "girl" };
+        String[] classes = new String[] { "1班", "2班", "3班", "1班", "1班", "2班", "2班", "3班", "3班", "3班" };
+
+        //定义随机数
+        Random random = new Random();
+
+        long key = System.currentTimeMillis();
+        for (int i = 0; i < 10; i++)
+        {
+            //循环创建学生
+            Student student = new Student("rowkey" + (key + i),
+                    new EssentialInformation(names[i], ages[i], genders[i], classes[i]),
+                    new ScoreInformation(random.nextInt(100), random.nextInt(100), random.nextInt(100), random.nextInt(100)));
+            student.save();
+        }
+
+        HTable table = new HTable(HBaseHelper.CONF, Student.TABLE_NAME);
+        //全表检索
+        ResultScanner rs = HBaseHelper.scanAll(table);
+
+        //打印结果
+        for (Result r : rs)
+        {
+            Student student = new Student();
+            student.parse(r);
+            System.out.println(student.toString());
+        }
+        table.close();
+
+    }
+}
+
+10：运行测试
+首先启动Hadoop，启动完成后。
+启动HBase，启动完成后。
+运行TestMain，可以看见正确输出。
+11：运行shell
+bin>hbase shell
+
+执行,列出所有的表
+
+hbase(main)> list
+
+列出这个表里的全部数据，展示非常不友好
+
+hbase(main)>scan ‘student’
+
+结束语
+目前java可以正确调用HBase的数据，可以添加和查询。我们搭建的windows环境可以正常工作。
+这里zookeeper没有启动，log4j的日志里有提醒，不影响操作，因此没有管。
+后续需要完成的操作有：删除表，按条件查询，根据rowkey进行查询，更新记录，删除记录等。
+记录需要添加Version，可以检索多个版本的数据。
+改天再装一个图像化的查询工具。
+
