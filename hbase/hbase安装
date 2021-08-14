@@ -73,6 +73,12 @@ bin>hbase shell
 
 下一篇文章介绍HBase通过Java API进行操作。
 
+安装hbase参考地址:
+https://blog.csdn.net/tornadojava/article/details/56479651
+
+java操作hbase:
+
+https://blog.csdn.net/tornadojava/article/details/56494384
 
 
 
