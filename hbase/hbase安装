@@ -2,3 +2,78 @@ hbase 所有版本下载地址：
 
 http://archive.apache.org/dist/hbase/
 
+
+部署
+1：修改配置
+conf/hbase-site.xml
+<configuration>
+    <property>
+           <!-- hbase提供的服务地址-->
+           <name>hbase.master</name>
+           <value>localhost:6000</value>
+   </property>
+   <property>
+           <name>hbase.master.maxclockskew</name>
+           <value>180000</value>
+   </property>
+   <property>
+          <!-- hbase在hdfs里的目录 -->
+           <name>hbase.rootdir</name>
+           <value>hdfs://localhost:9000/hbase</value>
+   </property>
+   <property>
+           <name>hbase.cluster.distributed</name>
+           <value>false</value>
+   </property>
+   <property>
+           <!-- ZK的主机地址 -->
+           <name>hbase.zookeeper.quorum</name>
+           <value>localhost</value>
+   </property>
+   <property>
+            <!-- hbase在ZK上保存数据的目录 -->
+           <name>hbase.zookeeper.property.dataDir</name>
+           <value>/hbase</value>
+   </property>
+   <property>
+           <name>dfs.replication</name>
+           <value>1</value>
+   </property>
+</configuration>
+
+2：修改命令
+修改 conf/hbase-env.cmd
+设置JAVA_HOME，类似于部署hadoop。
+
+set JAVA_HOME=C:\PROGRA~1\Java\jdk1.8.0_131
+
+3：停止hadoop
+sbin>stop-all.cmd
+
+4：格式化Hadoop命名节点
+这一步主要是防止错误发生。
+
+bin>hdfs namenode -format
+
+5：启动hadoop
+sbin>start-all
+
+6：启动hbase  [不需要启动zookeeper]
+bin>start-hbase.cmd
+
+7:启动 HBase的rest服务
+bin>hbase rest start -p 6000
+
+访问：http://localhost:8085
+
+8：启动HBase Shell
+bin>hbase shell
+
+可以通过shell操作hbase了。
+
+下一篇文章介绍HBase通过Java API进行操作。
+
+
+
+
+
