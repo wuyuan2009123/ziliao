@@ -11,12 +11,6 @@ flink 本地集群搭建
 maven项目骨架地址：
 https://flink.apache.org/q/quickstart.sh
 
-mvn archetype:generate								\
-  -DarchetypeGroupId=org.apache.flink				\
-  -DarchetypeArtifactId=flink-quickstart-java		\
-  -DarchetypeVersion=${1:-1.13.2}							\
-  -DgroupId=org.myorg.quickstart					\
-  -DartifactId=$PACKAGE								\
-  -Dversion=0.1										\
-  -Dpackage=org.myorg.quickstart					\
-  -DinteractiveMode=false
+mvn archetype:generate -DarchetypeCatalog=internal -DarchetypeGroupId=org.apache.flink -DarchetypeArtifactId=flink-quickstart-scala -DarchetypeVersion=1.10.0
+
+
